@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Belt Solitaire</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Righteous&family=Exo+2:wght@400;600;800&display=swap');
+
+* { box-sizing: border-box; margin: 0; padding: 0; touch-action: manipulation; }
+
+body {
+  background: #0d1520;
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-family: 'Exo 2', sans-serif;
+  overflow: hidden;
+}
+
+#game {
+  width: 420px;
+  height: 720px;
+  position: relative;
+  border-radius: 28px;
+  overflow: hidden;
+  box-shadow: 0 30px 80px rgba(0,0,0,0.8);
+  background: #1a2540;
+}
+
+/* TOP BAR */
+#topbar {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 56px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 18px;
+  background: rgba(0,0,0,0.4);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  z-index: 20;
+}
+#title {
+  font-family: 'Righteous', cursive;
+  font-size: 17px;
+  color: #f0c040;
+  letter-spacing: 1px;
+  text-shadow: 0 0 16px rgba(240,192,64,0.5);
+}
+.stat { display: flex; flex-direction: column; align-items: center; }
+.stat-val { font-size: 17px; font-weight: 800; color: white; }
+.stat-lbl { font-size: 9px; color: rgba(255,255,255,0.4); letter-spacing: 1px; text-transform: uppercase; }
+#speed-btn {
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 8px;
+  color: white; padding: 4px 9px;
+  font-size: 11px; font-family: 'Exo 2', sans-serif; font-weight: 700;
+  cursor: pointer; transition: background 0.2s;
+}
+#speed-btn:hover { background: rgba(255,255,255,0.15); }
+
+/* BELT CANVAS — fills whole game area */
+#belt-canvas {
+  position: absolute;
+  top: 0; left: 0;
+  width: 420px; height: 720px;
+  z-index: 1;
+}
+
+/* CARDS — absolutely positioned over canvas */
+.card {
+  position: absolute;
+  width: 58px;
+  height: 80px;
+  background: #fdf6e3;
+  border-radius: 7px;
+  border: 1px solid rgba(0,0,0,0.18);
+  box-shadow: 2px 3px 8px rgba(0,0,0,0.55);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 3px 4px;
+  cursor: pointer;
+  z-index: 5;
+  transition: box-shadow 0.15s;
+  user-select: none;
+  transform-origin: center center;
+}
+.card:hover { box-shadow: 0 6px 20px rgba(0,0,0,0.6); filter: brightness(1.05); }
+.card.red { color: #cc1111; }
+.card.black { color: #111; }
+.card-top { display: flex; flex-direction: column; align-items: flex-start; line-height: 1; }
+.card-bot { display: flex; flex-direction: column; align-items: flex-end; line-height: 1; transform: rotate(180deg); }
+.card-rank { font-size: 14px; font-weight: 800; }
+.card-suit-sm { font-size: 11px; }
+.card-suit-lg { font-size: 24px; text-align: center; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-52%); }
+
+.card.face-down {
+  background: linear-gradient(135deg, #1e4a8a 0%, #0d2d55 50%, #1e4a8a 100%);
+  cursor: pointer;
+}
+.card.face-down::after {
+  content: '';
+  position: absolute; inset: 4px;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 4px;
+  background: repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(255,255,255,0.025) 4px, rgba(255,255,255,0.025) 5px);
+}
+
+.card.glow-green {
+  box-shadow: 0 0 0 2.5px #3ddc84, 0 4px 16px rgba(0,0,0,0.5);
+  animation: pulse-g 0.7s ease-in-out infinite alternate;
+}
+@keyframes pulse-g {
+  from { box-shadow: 0 0 0 2px #3ddc84, 2px 3px 8px rgba(0,0,0,0.5); }
+  to   { box-shadow: 0 0 0 4px #3ddc84, 0 6px 20px rgba(61,220,132,0.3); }
+}
+
+.card.fly-out {
+  animation: flyOut 0.28s ease-in forwards;
+  pointer-events: none;
+}
+@keyframes flyOut {
+  0%   { opacity:1; transform: var(--card-transform) scale(1); }
+  100% { opacity:0; transform: var(--card-transform) scale(0.4) translateY(-30px); }
+}
+
+@keyframes shake {
+  0%,100%{ transform: var(--card-transform) translateX(0); }
+  25%    { transform: var(--card-transform) translateX(-5px); }
+  75%    { transform: var(--card-transform) translateX(5px); }
+}
+.card.shake { animation: shake 0.3s ease; }
+
+/* FOUNDATIONS */
+#foundations {
+  position: absolute;
+  z-index: 10;
+  display: flex;
+  gap: 10px;
+  /* centered in the loop */
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.foundation {
+  width: 68px;
+  height: 92px;
+  border-radius: 9px;
+  border: 2px dashed rgba(255,255,255,0.2);
+  background: rgba(0,0,0,0.3);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
+}
+.foundation.can-accept {
+  border-color: #3ddc84;
+  background: rgba(61,220,132,0.08);
+  box-shadow: 0 0 18px rgba(61,220,132,0.25);
+}
+.foundation-suit { font-size: 26px; opacity: 0.22; pointer-events: none; }
+.foundation-count {
+  position: absolute; bottom: 3px; right: 5px;
+  font-size: 9px; font-weight: 800;
+  color: rgba(255,255,255,0.45);
+  pointer-events: none;
+}
+.foundation .f-card {
+  position: absolute; inset: 0;
+  border-radius: 7px;
+  display: flex; flex-direction: column;
+  justify-content: space-between;
+  padding: 3px 4px;
+  pointer-events: none;
+  font-family: 'Exo 2', sans-serif;
+}
+.foundation .f-card.red { color: #cc1111; background: #fdf6e3; }
+.foundation .f-card.black { color: #111; background: #fdf6e3; }
+
+/* BOTTOM BAR */
+#bottombar {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 64px;
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  padding: 0 12px;
+  background: rgba(0,0,0,0.45);
+  border-top: 1px solid rgba(255,255,255,0.06);
+  z-index: 20;
+}
+.action-btn {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 12px;
+  padding: 6px 12px;
+  cursor: pointer; color: white;
+  font-family: 'Exo 2', sans-serif;
+  font-size: 10px; font-weight: 600;
+  transition: background 0.2s, transform 0.1s;
+}
+.action-btn:hover { background: rgba(255,255,255,0.12); transform: translateY(-2px); }
+.action-btn .icon { font-size: 18px; }
+.action-btn.gold {
+  background: linear-gradient(135deg,#f0c040,#d08010);
+  border-color: transparent; color: #1a1000; font-weight: 800;
+}
+.action-btn.gold:hover { filter: brightness(1.1); }
+
+/* OVERLAY */
+#overlay {
+  position: absolute; inset: 0;
+  background: rgba(10,18,32,0.92);
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  z-index: 100; border-radius: 28px; gap: 14px;
+}
+#overlay h2 {
+  font-family: 'Righteous', cursive; font-size: 34px;
+  color: #f0c040;
+  text-shadow: 0 0 30px rgba(240,192,64,0.5);
+}
+#overlay p { color: rgba(255,255,255,0.7); font-size: 14px; text-align: center; padding: 0 30px; line-height: 1.7; }
+#overlay button {
+  background: linear-gradient(135deg,#f0c040,#d08010);
+  border: none; border-radius: 12px;
+  color: #1a1000; font-family: 'Exo 2', sans-serif;
+  font-size: 15px; font-weight: 800;
+  padding: 11px 34px; cursor: pointer;
+  box-shadow: 0 4px 20px rgba(240,192,64,0.35);
+  transition: transform 0.15s;
+}
+#overlay button:hover { transform: scale(1.05); }
+
+/* TOAST */
+#toast {
+  position: absolute; bottom: 80px; left: 50%;
+  transform: translateX(-50%);
+  background: rgba(30,40,70,0.95);
+  border: 1px solid rgba(255,255,255,0.15);
+  color: white; padding: 7px 18px;
+  border-radius: 18px; font-size: 12px; font-weight: 700;
+  pointer-events: none; opacity: 0;
+  transition: opacity 0.25s; z-index: 50; white-space: nowrap;
+}
+#toast.show { opacity: 1; }
+
+/* FREEZE OVERLAY */
+#freeze-veil {
+  position: absolute; inset: 0;
+  background: rgba(100,180,255,0.04);
+  pointer-events: none; z-index: 8;
+  opacity: 0; transition: opacity 0.3s;
+  border-radius: 28px;
+}
+#freeze-veil.active { opacity: 1; }
+</style>
+</head>
+<body>
+<div id="game">
+  <canvas id="belt-canvas" width="420" height="720"></canvas>
+
+  <div id="topbar">
+    <div id="title">⚙ BELT SOLITAIRE</div>
+    <div class="stat"><div class="stat-val" id="score-val">0</div><div class="stat-lbl">Score</div></div>
+    <div class="stat"><div class="stat-val" id="combo-val">×1</div><div class="stat-lbl">Combo</div></div>
+    <button id="speed-btn" onclick="cycleSpeed()">⚡ SLOW</button>
+  </div>
+
+  <div id="foundations">
+    <div class="foundation" id="f-♠" data-suit="♠" onclick="foundationClick('♠')">
+      <div class="foundation-suit">♠</div>
+      <div class="foundation-count" id="fc-♠">0/13</div>
+    </div>
+    <div class="foundation" id="f-♥" data-suit="♥" onclick="foundationClick('♥')">
+      <div class="foundation-suit" style="color:#cc3333">♥</div>
+      <div class="foundation-count" id="fc-♥">0/13</div>
+    </div>
+    <div class="foundation" id="f-♦" data-suit="♦" onclick="foundationClick('♦')">
+      <div class="foundation-suit" style="color:#cc3333">♦</div>
+      <div class="foundation-count" id="fc-♦">0/13</div>
+    </div>
+    <div class="foundation" id="f-♣" data-suit="♣" onclick="foundationClick('♣')">
+      <div class="foundation-suit">♣</div>
+      <div class="foundation-count" id="fc-♣">0/13</div>
+    </div>
+  </div>
+
+  <div id="bottombar">
+    <button class="action-btn" onclick="useFreeze()"><span class="icon">🧊</span><span>FREEZE</span></button>
+    <button class="action-btn gold" onclick="useReveal()"><span class="icon">👁</span><span>REVEAL</span></button>
+    <button class="action-btn" onclick="useShuffle()"><span class="icon">🔀</span><span>SHUFFLE</span></button>
+    <button class="action-btn" onclick="newGame()"><span class="icon">🔄</span><span>NEW</span></button>
+  </div>
+
+  <div id="freeze-veil"></div>
+
+  <div id="overlay">
+    <h2>BELT SOLITAIRE</h2>
+    <p>Cards loop around the belt counter-clockwise.<br>Tap them in order (A → K) to collect each suit.<br>Grab them before they loop away!</p>
+    <button onclick="newGame()">▶ START GAME</button>
+  </div>
+
+  <div id="toast"></div>
+</div>
+
+<script>
+// ── CONSTANTS ──
+const SUITS = ['♠','♥','♦','♣'];
+const RANKS = ['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
+const RED = new Set(['♥','♦']);
+
+// ── BELT PATH ──
+// Single rounded-rectangle loop, counter-clockwise
+// Game is 420×720, topbar=56, bottombar=64
+// Belt occupies: y from 56 to 656 (720-64), x from 18 to 402
+const GW = 420, GH = 720;
+const BELT_PAD = 20;
+const BELT_TOP = 66;
+const BELT_BOT = 650;
+const BELT_L = 22;
+const BELT_R = 398;
+const CORNER_R = 52;
+const BELT_W = 38; // visual width of belt track
+
+// Build a closed path of points going counter-clockwise
+// Starting point: bottom-left corner area (entry/exit)
+// CCW means: up the left side → across the top → down the right → across the bottom → back
+
+function buildPath() {
+  // We'll parameterize the path 0..1 = full loop
+  // CCW: start bottom-left, go UP left side, across top-left corner, RIGHT across top,
+  // top-right corner, DOWN right side, bottom-right corner, LEFT across bottom, bottom-left corner = back
+
+  const cx1 = BELT_L + CORNER_R; // left corners center x
+  const cx2 = BELT_R - CORNER_R; // right corners center x
+  const cy1 = BELT_TOP + CORNER_R; // top corners center y
+  const cy2 = BELT_BOT - CORNER_R; // bottom corners center y
+
+  // Segments (CCW):
+  // 1. Bottom straight: right→left  (cy2+CORNER_R bottom, from cx2 to cx1)
+  // 2. Bottom-left corner: 270°→180° (cx1,cy2) 
+  // 3. Left straight: bottom→top (cx1-CORNER_R left, from cy2 to cy1)
+  // 4. Top-left corner: 180°→90° (cx1,cy1)
+  // 5. Top straight: left→right (cy1-CORNER_R top, from cx1 to cx2)
+  // 6. Top-right corner: 90°→0° (cx2,cy1)
+  // 7. Right straight: top→bottom (cx2+CORNER_R right, from cy1 to cy2)
+  // 8. Bottom-right corner: 0°→-90°=270° (cx2,cy2)
+
+  const segments = [];
+  const STEPS = 8; // points per corner arc
+
+  // Helper: arc points
+  function arc(cx, cy, r, startDeg, endDeg, steps) {
+    const pts = [];
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      const a = (startDeg + t * (endDeg - startDeg)) * Math.PI / 180;
+      pts.push({ x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) });
+    }
+    return pts;
+  }
+
+  const centerR = CORNER_R; 
+  const pts = [];
+
+  // Bottom-left START: point just above bottom-left corner on left side
+  // Going CCW = going UP the left side first
+
+  // Left side: going UP (from cy2 to cy1)
+  pts.push({ x: BELT_L, y: cy2 });
+  pts.push({ x: BELT_L, y: cy1 });
+
+  // Top-left corner: going from 180° to 90° (CCW = decreasing angle)
+  const tlArc = arc(cx1, cy1, centerR, 180, 90, STEPS);
+  pts.push(...tlArc);
+
+  // Top side: going RIGHT (from cx1 to cx2)
+  pts.push({ x: cx1, y: BELT_TOP });
+  pts.push({ x: cx2, y: BELT_TOP });
+
+  // Top-right corner: 90° to 0°
+  const trArc = arc(cx2, cy1, centerR, 90, 0, STEPS);
+  pts.push(...trArc);
+
+  // Right side: going DOWN (from cy1 to cy2)
+  pts.push({ x: BELT_R, y: cy1 });
+  pts.push({ x: BELT_R, y: cy2 });
+
+  // Bottom-right corner: 0° to -90° (= 270°)
+  const brArc = arc(cx2, cy2, centerR, 0, -90, STEPS);
+  pts.push(...brArc);
+
+  // Bottom side: going LEFT (from cx2 to cx1)
+  pts.push({ x: cx2, y: BELT_BOT });
+  pts.push({ x: cx1, y: BELT_BOT });
+
+  // Bottom-left corner: -90° (270°) to 180°
+  const blArc = arc(cx1, cy2, centerR, -90, -180, STEPS);
+  pts.push(...blArc);
+
+  return pts;
+}
+
+// Compute cumulative arc-length parameterization
+function buildSpline(pts) {
+  const segs = [];
+  let total = 0;
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[i];
+    const b = pts[(i + 1) % pts.length];
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    segs.push({ x: a.x, y: a.y, len, cumLen: total });
+    total += len;
+  }
+  segs.push({ ...segs[0], cumLen: total }); // close
+  return { segs, total };
+}
+
+// Get position and angle at distance d along path
+function getPathPoint(spline, d) {
+  const { segs, total } = spline;
+  d = ((d % total) + total) % total;
+  for (let i = 0; i < segs.length - 1; i++) {
+    const s = segs[i];
+    const n = segs[i + 1];
+    if (d >= s.cumLen && d < n.cumLen) {
+      const t = (d - s.cumLen) / (n.cumLen - s.cumLen || 1);
+      const x = s.x + t * (n.x - s.x);
+      const y = s.y + t * (n.y - s.y);
+      const angle = Math.atan2(n.y - s.y, n.x - s.x);
+      return { x, y, angle };
+    }
+  }
+  return { x: segs[0].x, y: segs[0].y, angle: 0 };
+}
+
+const PATH_PTS = buildPath();
+const SPLINE = buildSpline(PATH_PTS);
+const TOTAL_LEN = SPLINE.total;
+
+// ── CANVAS DRAWING ──
+const canvas = document.getElementById('belt-canvas');
+const ctx = canvas.getContext('2d');
+
+function drawBelt() {
+  ctx.clearRect(0, 0, GW, GH);
+
+  const cx1 = BELT_L + CORNER_R;
+  const cx2 = BELT_R - CORNER_R;
+  const cy1 = BELT_TOP + CORNER_R;
+  const cy2 = BELT_BOT - CORNER_R;
+
+  // Draw outer track (background)
+  function roundRect(x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+  }
+
+  const BW = BELT_W;
+  const outerPad = 4;
+
+  // Outer glow
+  ctx.save();
+  ctx.shadowColor = 'rgba(100,160,255,0.25)';
+  ctx.shadowBlur = 18;
+  roundRect(BELT_L - outerPad, BELT_TOP - outerPad, (BELT_R - BELT_L) + outerPad*2, (BELT_BOT - BELT_TOP) + outerPad*2, CORNER_R + outerPad);
+  ctx.strokeStyle = 'rgba(120,160,255,0.35)';
+  ctx.lineWidth = BW + outerPad * 2;
+  ctx.stroke();
+  ctx.restore();
+
+  // Belt track fill (dark green/teal)
+  roundRect(BELT_L, BELT_TOP, BELT_R - BELT_L, BELT_BOT - BELT_TOP, CORNER_R);
+  ctx.strokeStyle = '#1a3030';
+  ctx.lineWidth = BW;
+  ctx.stroke();
+
+  // Belt stripes (animated via offset)
+  ctx.save();
+  ctx.strokeStyle = '#1f3a3a';
+  ctx.lineWidth = BW - 4;
+  // Clip to track area
+  roundRect(BELT_L, BELT_TOP, BELT_R - BELT_L, BELT_BOT - BELT_TOP, CORNER_R);
+  ctx.clip();
+
+  const STRIPE_SPACING = 52;
+  const off = (beltOffset % STRIPE_SPACING);
+  // Draw dashed stripes along path
+  ctx.setLineDash([24, STRIPE_SPACING - 24]);
+  ctx.lineDashOffset = -off;
+  roundRect(BELT_L, BELT_TOP, BELT_R - BELT_L, BELT_BOT - BELT_TOP, CORNER_R);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.restore();
+
+  // Belt inner edge (lighter)
+  roundRect(BELT_L + BW/2 + 2, BELT_TOP + BW/2 + 2, (BELT_R - BELT_L) - BW - 4, (BELT_BOT - BELT_TOP) - BW - 4, CORNER_R - BW/2 - 2);
+  ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // Belt outer edge
+  roundRect(BELT_L - BW/2 - 2, BELT_TOP - BW/2 - 2, (BELT_R - BELT_L) + BW + 4, (BELT_BOT - BELT_TOP) + BW + 4, CORNER_R + BW/2 + 2);
+  ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+  ctx.lineWidth = 2.5;
+  ctx.stroke();
+
+  // Arrows showing direction (CCW)
+  drawArrows();
+}
+
+function drawArrows() {
+  ctx.save();
+  ctx.fillStyle = 'rgba(255,255,255,0.12)';
+  ctx.font = '13px Exo 2';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  // Sample a few points along the path and draw chevrons
+  const arrowPositions = [0.06, 0.18, 0.31, 0.44, 0.56, 0.69, 0.81, 0.93];
+  for (const t of arrowPositions) {
+    const p = getPathPoint(SPLINE, t * TOTAL_LEN);
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.rotate(p.angle);
+    ctx.fillText('›', 0, 0);
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
+// ── STATE ──
+let cards = [];
+let foundations = { '♠':0, '♥':0, '♦':0, '♣':0 };
+let score = 0, combo = 1;
+let comboTimer = null;
+let speedLevel = 1;
+let speeds = [0, 1.8, 3.2, 5.5]; // px per frame at 60fps
+let frozen = false, freezeTimer = null;
+let freezeUses = 2, revealUses = 2, shuffleUses = 1;
+let beltOffset = 0; // for stripe animation
+let animFrame = null;
+let gameOver = false;
+let lastTs = 0;
+
+// Each card: { suit, rank, faceUp, id, dist } dist = distance along path
+function buildDeck() {
+  const d = [];
+  for (const s of SUITS)
+    for (const r of RANKS)
+      d.push({ suit:s, rank:r, faceUp:false, id:`${r}${s}` });
+  return d;
+}
+function shuffle(a) {
+  for (let i=a.length-1;i>0;i--) { const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; }
+  return a;
+}
+
+function newGame() {
+  cancelAnimationFrame(animFrame);
+  gameOver = false;
+  frozen = false; clearTimeout(freezeTimer);
+  score = 0; combo = 1;
+  freezeUses = 2; revealUses = 2; shuffleUses = 1;
+  foundations = { '♠':0, '♥':0, '♦':0, '♣':0 };
+  beltOffset = 0;
+
+  const deck = shuffle(buildDeck());
+  const CARD_SPACING = TOTAL_LEN / deck.length;
+  cards = deck.map((c, i) => ({
+    ...c,
+    faceUp: i % 3 !== 0,
+    dist: i * CARD_SPACING,
+    el: null,
+    removing: false
+  }));
+
+  // Build card DOM elements
+  const game = document.getElementById('game');
+  document.querySelectorAll('.card').forEach(e => e.remove());
+  for (const card of cards) {
+    card.el = makeCardEl(card);
+    game.appendChild(card.el);
+  }
+
+  updateUI();
+  updateAllFoundations();
+  hideOverlay();
+  lastTs = performance.now();
+  animFrame = requestAnimationFrame(loop);
+}
+
+function makeCardEl(card) {
+  const el = document.createElement('div');
+  updateCardEl(el, card);
+  el.onclick = () => cardClick(card);
+  return el;
+}
+
+function updateCardEl(el, card) {
+  el.dataset.id = card.id;
+  if (!card.faceUp) {
+    el.className = 'card face-down';
+    el.innerHTML = '';
+  } else {
+    const isRed = RED.has(card.suit);
+    el.className = `card ${isRed ? 'red' : 'black'}`;
+    el.innerHTML = `
+      <div class="card-top"><div class="card-rank">${card.rank}</div><div class="card-suit-sm">${card.suit}</div></div>
+      <div class="card-suit-lg">${card.suit}</div>
+      <div class="card-bot"><div class="card-rank">${card.rank}</div><div class="card-suit-sm">${card.suit}</div></div>
+    `;
+  }
+}
+
+// ── MAIN LOOP ──
+function loop(ts) {
+  if (gameOver) return;
+  const dt = Math.min((ts - lastTs) / 16.67, 3);
+  lastTs = ts;
+
+  const spd = speeds[speedLevel];
+
+  if (!frozen) {
+    beltOffset += spd * dt;
+    for (const card of cards) {
+      if (card.removing) continue;
+      card.dist = (card.dist + spd * dt) % TOTAL_LEN;
+    }
+  }
+
+  drawBelt();
+  positionCards();
+  highlightPlayable();
+
+  animFrame = requestAnimationFrame(loop);
+}
+
+function positionCards() {
+  for (const card of cards) {
+    if (card.removing || !card.el) continue;
+    const p = getPathPoint(SPLINE, card.dist);
+    const W = 58, H = 80;
+    const x = p.x - W / 2;
+    const y = p.y - H / 2;
+    const deg = p.angle * 180 / Math.PI;
+    const t = `rotate(${deg}deg)`;
+    card.el.style.left = x + 'px';
+    card.el.style.top = y + 'px';
+    card.el.style.transform = t;
+    card.el.style.setProperty('--card-transform', t);
+  }
+}
+
+function highlightPlayable() {
+  for (const card of cards) {
+    if (card.removing || !card.el || !card.faceUp) {
+      if (card.el) card.el.classList.remove('glow-green');
+      continue;
+    }
+    const canPlay = RANKS[foundations[card.suit]] === card.rank;
+    card.el.classList.toggle('glow-green', canPlay);
+  }
+
+  // Foundation highlights
+  for (const suit of SUITS) {
+    const needed = RANKS[foundations[suit]];
+    const hasIt = cards.some(c => !c.removing && c.faceUp && c.suit === suit && c.rank === needed);
+    document.getElementById(`f-${suit}`).classList.toggle('can-accept', hasIt);
+  }
+}
+
+// ── CARD CLICK ──
+function cardClick(card) {
+  if (card.removing) return;
+
+  if (!card.faceUp) {
+    card.faceUp = true;
+    updateCardEl(card.el, card);
+    return;
+  }
+
+  const needed = RANKS[foundations[card.suit]];
+  if (card.rank !== needed) {
+    showToast(`Need ${needed}${card.suit} first!`);
+    card.el.classList.remove('shake');
+    void card.el.offsetWidth;
+    card.el.classList.add('shake');
+    setTimeout(() => card.el && card.el.classList.remove('shake'), 350);
+    return;
+  }
+
+  // Collect!
+  card.removing = true;
+  card.el.classList.add('fly-out');
+
+  setTimeout(() => {
+    if (card.el) { card.el.remove(); card.el = null; }
+    cards = cards.filter(c => c !== card);
+    foundations[card.suit]++;
+    score += 10 * combo;
+    combo = Math.min(combo + 1, 8);
+    clearTimeout(comboTimer);
+    comboTimer = setTimeout(() => { combo = 1; updateUI(); }, 4000);
+    updateUI();
+    updateFoundationDisplay(card.suit);
+
+    if (Object.values(foundations).every(v => v === 13)) {
+      gameOver = true;
+      setTimeout(() => showOverlay('🎉 YOU WIN!', `Score: ${score}. All 52 cards collected!`, 'PLAY AGAIN'), 500);
+    }
+  }, 260);
+}
+
+// ── FOUNDATIONS ──
+function foundationClick(suit) {
+  const needed = RANKS[foundations[suit]];
+  showToast(`Looking for: ${needed}${suit}`);
+}
+
+function updateFoundationDisplay(suit) {
+  const count = foundations[suit];
+  const fd = document.getElementById(`f-${suit}`);
+  const isRed = RED.has(suit);
+  if (count === 0) {
+    fd.innerHTML = `<div class="foundation-suit" style="${isRed?'color:#cc3333':''}">${suit}</div><div class="foundation-count" id="fc-${suit}">0/13</div>`;
+    return;
+  }
+  const topRank = RANKS[count - 1];
+  fd.innerHTML = `
+    <div class="f-card ${isRed?'red':'black'}">
+      <div class="card-top"><div class="card-rank">${topRank}</div><div class="card-suit-sm">${suit}</div></div>
+      <div class="card-suit-lg" style="font-size:22px;position:absolute;top:50%;left:50%;transform:translate(-50%,-52%)">${suit}</div>
+      <div class="card-bot"><div class="card-rank">${topRank}</div><div class="card-suit-sm">${suit}</div></div>
+    </div>
+    <div class="foundation-count" id="fc-${suit}" style="z-index:2">${count}/13</div>
+  `;
+}
+
+function updateAllFoundations() {
+  for (const s of SUITS) updateFoundationDisplay(s);
+}
+
+// ── UI ──
+function updateUI() {
+  document.getElementById('score-val').textContent = score;
+  document.getElementById('combo-val').textContent = `×${combo}`;
+}
+
+function cycleSpeed() {
+  speedLevel = speedLevel % 3 + 1;
+  const labels = ['','SLOW','NORMAL','FAST'];
+  document.getElementById('speed-btn').textContent = `⚡ ${labels[speedLevel]}`;
+}
+
+// ── POWERUPS ──
+function useFreeze() {
+  if (freezeUses <= 0) { showToast('No freezes left!'); return; }
+  freezeUses--;
+  frozen = true;
+  document.getElementById('freeze-veil').classList.add('active');
+  clearTimeout(freezeTimer);
+  showToast('❄️ Belt frozen for 5s!');
+  freezeTimer = setTimeout(() => {
+    frozen = false;
+    document.getElementById('freeze-veil').classList.remove('active');
+  }, 5000);
+}
+
+function useReveal() {
+  if (revealUses <= 0) { showToast('No reveals left!'); return; }
+  revealUses--;
+  const hidden = cards.filter(c => !c.faceUp && !c.removing);
+  hidden.forEach(c => { c.faceUp = true; updateCardEl(c.el, c); });
+  showToast('👁 All cards revealed for 3s!');
+  setTimeout(() => {
+    hidden.forEach(c => { if (!c.removing) { c.faceUp = false; updateCardEl(c.el, c); } });
+  }, 3000);
+}
+
+function useShuffle() {
+  if (shuffleUses <= 0) { showToast('No shuffles left!'); return; }
+  shuffleUses--;
+  const spacing = TOTAL_LEN / cards.length;
+  const shuffled = shuffle([...cards]);
+  shuffled.forEach((c, i) => { c.dist = i * spacing; });
+  showToast('🔀 Belt shuffled!');
+}
+
+// ── TOAST ──
+let toastTimer = null;
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2000);
+}
+
+function showOverlay(title, body, btn) {
+  cancelAnimationFrame(animFrame);
+  const ov = document.getElementById('overlay');
+  ov.innerHTML = `<h2>${title}</h2><p>${body}</p><button onclick="newGame()">${btn}</button>`;
+  ov.style.display = 'flex';
+}
+function hideOverlay() {
+  document.getElementById('overlay').style.display = 'none';
+}
+</script>
+</body>
+</html>
